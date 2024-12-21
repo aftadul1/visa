@@ -1,0 +1,196 @@
+(function () {
+    // Define appointment date
+    const appointmentDate = "2024-12-23";
+
+    // Flags and counters
+    let isRunning = false;
+    let retryCount = 0;
+    let retryDelay = 0;
+    let countdownInterval; // Interval for countdown updates
+
+    // Create the control buttons
+    function createControlButtons() {
+        // Create container
+        const container = document.createElement("div");
+        container.style.position = "fixed";
+        container.style.bottom = "10px";
+        container.style.right = "10px";
+        container.style.zIndex = "1000";
+        container.style.display = "flex";
+        container.style.gap = "10px";
+
+        // Start/Stop Button
+        const toggleButton = document.createElement("button");
+        toggleButton.textContent = `Start (Retries: 0)`;
+        toggleButton.style.padding = "8px 15px";
+        toggleButton.style.fontSize = "16px";
+        toggleButton.style.border = "none";
+        toggleButton.style.borderRadius = "5px";
+        toggleButton.style.cursor = "pointer";
+        toggleButton.style.backgroundColor = "red";
+        toggleButton.style.color = "white";
+        toggleButton.addEventListener("click", () => {
+            if (isRunning) {
+                stopBooking(toggleButton);
+            } else {
+                startBooking(toggleButton);
+            }
+        });
+        container.appendChild(toggleButton);
+
+        // Enable Pay Button
+        const enablePayButton = document.createElement("button");
+        enablePayButton.textContent = "Enable Pay";
+        enablePayButton.style.padding = "8px 15px";
+        enablePayButton.style.fontSize = "16px";
+        enablePayButton.style.border = "none";
+        enablePayButton.style.borderRadius = "5px";
+        enablePayButton.style.cursor = "pointer";
+        enablePayButton.style.backgroundColor = "blue";
+        enablePayButton.style.color = "white";
+        enablePayButton.addEventListener("click", () => enablePay(enablePayButton));
+        container.appendChild(enablePayButton);
+
+        // Retry Delay Display
+        const delayDisplay = document.createElement("div");
+        delayDisplay.id = "retryDelayDisplay";
+        delayDisplay.style.padding = "8px 15px";
+        delayDisplay.style.fontSize = "16px";
+        delayDisplay.style.color = "black";
+        delayDisplay.style.backgroundColor = "white";
+        delayDisplay.textContent = "Next retry in: N/A";
+        container.appendChild(delayDisplay);
+
+        document.body.appendChild(container);
+    }
+
+    // Function to start the appointment booking process
+    function startBooking(button) {
+        isRunning = true;
+        retryCount = 0; // Reset retry count
+        updateButtonLabel(button);
+        if (selectDate(appointmentDate)) {
+            handleAppointmentTimes(button);
+        }
+    }
+
+    // Function to stop the appointment booking process
+    function stopBooking(button) {
+        isRunning = false;
+        updateButtonLabel(button);
+        updateRetryDelayDisplay("N/A");
+        clearInterval(countdownInterval); // Clear the countdown interval
+    }
+
+    // Helper function to update the start/stop button label
+    function updateButtonLabel(button) {
+        const status = isRunning ? "Stop" : "Start";
+        const color = isRunning ? "green" : "red";
+        button.textContent = `${status} (Retries: ${retryCount})`;
+        button.style.backgroundColor = color;
+    }
+
+    // Helper function to update the retry delay display
+    function updateRetryDelayDisplay(timeLeft) {
+        const delayDisplay = document.getElementById("retryDelayDisplay");
+        if (delayDisplay) {
+            delayDisplay.textContent = `Next retry in: ${timeLeft}`;
+        }
+    }
+
+    // Helper function to enable the "Pay Now" button
+    function enablePay(button) {
+        const payButton = document.querySelector('button.btn.btn-default.ng-binding[ng-click="payNowV2()"]');
+        if (payButton) {
+            payButton.removeAttribute("disabled");
+            button.textContent = "Enabled!";
+            setTimeout(() => {
+                button.textContent = "Enable Pay";
+            }, 1000); // Revert label after 2 seconds
+        } else {
+            button.textContent = "Not Found!";
+            setTimeout(() => {
+                button.textContent = "Enable Pay";
+            }, 1000); // Revert label after 2 seconds
+        }
+    }
+
+    // Auto-close error pop-ups
+    function checkAndClosePopUps() {
+        const popUpButton = document.querySelector('button[ng-click="open_modal=0"]');
+        if (popUpButton) {
+            popUpButton.click();
+            console.log("Closed pop-up error.");
+        }
+    }
+
+    // Helper function to simulate a dropdown selection
+    function selectDate(date) {
+        const dateDropdown = document.querySelector('select[name="appointment_date"]');
+        if (!dateDropdown || !isRunning) return false;
+        let option = [...dateDropdown.options].find((opt) => opt.value === date);
+        if (!option) {
+            // Add the date dynamically if not available
+            option = document.createElement("option");
+            option.value = date;
+            option.textContent = date;
+            dateDropdown.appendChild(option);
+        }
+        dateDropdown.value = date;
+        dateDropdown.dispatchEvent(new Event("change")); // Trigger change event
+        checkAndClosePopUps(); // Check for pop-ups during selection
+        return true;
+    }
+
+    // Helper function to check appointment times
+    function handleAppointmentTimes(button) {
+        if (!isRunning) return;
+        setTimeout(() => {
+            const timeDropdown = document.querySelector('select[name="appointment_time"]');
+            if (!timeDropdown || !isRunning) return;
+
+            if (timeDropdown.options.length > 1) {
+                // Select the first available time (after the placeholder option)
+                timeDropdown.selectedIndex = 1;
+                timeDropdown.dispatchEvent(new Event("change"));
+            } else {
+                // No times available; increment retry count and retry
+                retryCount++;
+                updateButtonLabel(button);
+                toggleDate(button);
+            }
+        }, 1000); // Wait for server response (adjust delay if needed)
+    }
+
+    // Helper function to toggle the date selection
+    function toggleDate(button) {
+        if (!isRunning) return;
+        const dateDropdown = document.querySelector('select[name="appointment_date"]');
+        if (!dateDropdown) return;
+
+        dateDropdown.value = ""; // Unselect the date
+        dateDropdown.dispatchEvent(new Event("change"));
+        checkAndClosePopUps(); // Check for pop-ups during unselection
+
+        retryDelay = Math.floor(Math.random() * (6 - 3 + 1) + 3); // Random delay between 10 and 40 seconds
+        let timeLeft = retryDelay;
+        updateRetryDelayDisplay(`${timeLeft} seconds`);
+
+        clearInterval(countdownInterval); // Clear any previous countdown
+        countdownInterval = setInterval(() => {
+            timeLeft--;
+            updateRetryDelayDisplay(`${timeLeft} seconds`);
+            if (timeLeft <= 0) {
+                clearInterval(countdownInterval);
+            }
+        }, 1000); // Update every second
+
+        setTimeout(() => {
+            selectDate(appointmentDate); // Re-select the date
+            handleAppointmentTimes(button);
+        }, retryDelay * 1000); // Wait before reselecting the date
+    }
+
+    // Initialize the control buttons
+    createControlButtons();
+})();
